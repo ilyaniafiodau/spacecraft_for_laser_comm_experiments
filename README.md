@@ -1,4 +1,3 @@
-# spacecraft_for_laser_comm_experiments
-'''
-a bachelor's thesis
-'''
+# Spacecraft for LaserComm Experiments
+## A Bachelor's Thesis
+
