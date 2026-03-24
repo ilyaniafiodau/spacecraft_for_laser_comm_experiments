@@ -1,0 +1,10 @@
+# Virtual environments
+venv/
+in_space/         
+
+# IDE settings
+.vscode/
+.idea/
+
+# macOS system files
+.DS_Store
