@@ -13,7 +13,7 @@ K1 = 0
 K2 = 0
 K3 = 0
 K4 = 0
-c_ball_m2kg = np.arange(0.001, 0.004, 0.001)
+c_ball_m2kg = np.arange(0.001, 0.006, 0.001)
 
 i0_rad = math.radians(i0_deg)
 r0_m = r_earth_m + h0_m        
@@ -94,141 +94,152 @@ def RK4(t: np.float64, dh: np.float64, state_vector: np.ndarray, i: np.int16) ->
     k4 = right_sides(t + dh, state_vector + dh * k3, i)              
     state_vector_next = state_vector + dh * (k1 + 2*k2 + 2*k3 + k4) / 6
     return state_vector_next
-
-traj_points = [state_vector_0, ]           
-times = [t0_s, ]
-state_vector_i1 = state_vector_0.copy()             
-t_i1_s = t0_s
+                    
 dt_s = 1.0                                          
 altitude0_km = (np.linalg.norm(state_vector_0[0:3]) - r_earth_m) / 1000 
-heights = [altitude0_km, ]
 
 def check_step_size(dh: np.float64):
-    global t_i1_s, state_vector_i1
-    traj_points_check = [state_vector_0, ]
+    traj_points_check = [state_vector_0.copy(), ]
+    state_vector_local = state_vector_0.copy()
+    t_local_s = t0_s
     revs = 0
     while revs < 100:  
-        prev_z = state_vector_i1[2]  
-        next_state = RK4_airless(t_i1_s, dh, state_vector_i1)
+        prev_z = state_vector_local[2]  
+        next_state = RK4_airless(t_local_s, dh, state_vector_local)
         next_z = next_state[2]
         if prev_z <= 0 and next_z >= 0:
             revs += 1
             print(f'Число витков: {revs}')
-        state_vector_i1 = RK4_airless(t_i1_s, dt_s, state_vector_i1)
-        t_i1_s = t_i1_s + dt_s
-        traj_points_check.append(state_vector_i1)
+        state_vector_local = next_state
+        t_local_s = t_local_s + dh
+        traj_points_check.append(state_vector_local.copy())
     print(f'Последняя точка = {traj_points_check[-1]}')
     interp_point = traj_points_check[-2][0:3] + ((traj_points_check[-1][0:3] - traj_points_check[-2][0:3]) / (
         traj_points_check[-1][2] - traj_points_check[-2][2]) * (0 - traj_points_check[-2][2]))
     print(f'Интерполированная точка = {interp_point}')
     print(f'Расстояние между конечной и начальной точками восходящего узла, выраженное в метрах = ',
         np.linalg.norm(interp_point - state_vector_0[0:3]))
-    t_i1_s = t0_s
-    state_vector_i1 = state_vector_0.copy()
     
 def math_model_decline_by_10km(i: np.int16) -> np.ndarray:
-    global t_i1_s, state_vector_i1, r_earth_m, r0_m, dt_s, state_vector_0, altitude0_km, traj_points
-    print("Расчёт движения КА при снижении высоты орбиты на 10 км от начальной для баллистического коэффициента {c_ball_m2kg[i]} м^2/кг:")
-    while (r0_m - np.linalg.norm(state_vector_i1[0:3])) < 10e+03:  
-        altitude_km = (np.linalg.norm(state_vector_i1[0:3]) - r_earth_m) / 1000    
-        if t_i1_s % 5000 == 0:
+    print(f"Расчёт движения КА при снижении высоты орбиты на 10 км от начальной для баллистического коэффициента {c_ball_m2kg[i]} м^2/кг:")
+    t_local_s = t0_s
+    state_vector_local = state_vector_0.copy()
+    traj_points_local = [state_vector_local.copy()]
+    while (r0_m - np.linalg.norm(state_vector_local[0:3])) < 10e+03:  
+        altitude_km = (np.linalg.norm(state_vector_local[0:3]) - r_earth_m) / 1000    
+        if t_local_s % 5000 == 0:
             print (
-                "t:", t_i1_s, "с,",
-                "x:", round(state_vector_i1[0]/1000, 3), "км,",
-                "y:", round(state_vector_i1[1]/1000, 3), "км,",
-                "z:", round(state_vector_i1[2]/1000, 3), "км,",
-                "Vx:", round(state_vector_i1[3], 1), "м/с,",
-                "Vy:", round(state_vector_i1[4], 1), "м/с,",
-                "Vz:", round(state_vector_i1[5], 1), "м/с,",
+                "t:", t_local_s, "с,",
+                "x:", round(state_vector_local[0]/1000, 3), "км,",
+                "y:", round(state_vector_local[1]/1000, 3), "км,",
+                "z:", round(state_vector_local[2]/1000, 3), "км,",
+                "Vx:", round(state_vector_local[3], 1), "м/с,",
+                "Vy:", round(state_vector_local[4], 1), "м/с,",
+                "Vz:", round(state_vector_local[5], 1), "м/с,",
                 "h:", round(altitude_km, 3), "км;"
             )   
-        state_vector_i1 = RK4(t_i1_s, dt_s, state_vector_i1, i)   
-        t_i1_s = t_i1_s + dt_s
-        traj_points.append(state_vector_i1)
+        state_vector_local = RK4(t_local_s, dt_s, state_vector_local, i)   
+        t_local_s = t_local_s + dt_s
+        traj_points_local.append(state_vector_local.copy())
     print (
-        "t:", t_i1_s, "с,",
-        "x:", round(state_vector_i1[0]/1000, 3), "км,",
-        "y:", round(state_vector_i1[1]/1000, 3), "км,",
-        "z:", round(state_vector_i1[2]/1000, 3), "км,",
-        "Vx:", round(state_vector_i1[3], 1), "м/с,",
-        "Vy:", round(state_vector_i1[4], 1), "м/с,",
-        "Vz:", round(state_vector_i1[5], 1), "м/с,",
+        "t:", t_local_s, "с,",
+        "x:", round(state_vector_local[0]/1000, 3), "км,",
+        "y:", round(state_vector_local[1]/1000, 3), "км,",
+        "z:", round(state_vector_local[2]/1000, 3), "км,",
+        "Vx:", round(state_vector_local[3], 1), "м/с,",
+        "Vy:", round(state_vector_local[4], 1), "м/с,",
+        "Vz:", round(state_vector_local[5], 1), "м/с,",
         "h:", round(altitude_km, 3), "км;"
     )
     print("Расчёт завершён: снижение высоты орбиты на 10 км от начальной")
-    t_i1_s = t0_s
-    state_vector_i1 = state_vector_0.copy()
-    return traj_points
+    return np.array(traj_points_local, dtype=np.float64)
 
 def math_model_flight_over_100km(i: np.int16):
-    global t_i1_s, state_vector_i1, r_earth_m, r0_m, dt_s, altitude0_km, state_vector_0, heights, times
-    print("Расчёт движения КА на высотах свыше 100 км:")
-    while (np.linalg.norm(state_vector_i1[0:3]) - r_earth_m) >= 100e+03:  
-        altitude_km = (np.linalg.norm(state_vector_i1[0:3]) - r_earth_m) / 1000 
-        if t_i1_s % 15000 == 0:
-            print ("t:", t_i1_s, "с,",
-                "x:", round(state_vector_i1[0]/1000, 3), "км,",
-                "y:", round(state_vector_i1[1]/1000, 3), "км,",
-                "z:", round(state_vector_i1[2]/1000, 3), "км,",
-                "Vx:", round(state_vector_i1[3], 1), "м/с,",
-                "Vy:", round(state_vector_i1[4], 1), "м/с,",
-                "Vz:", round(state_vector_i1[5], 1), "м/с,",
+    print(f"Расчёт движения КА на высотах свыше 100 км для баллистического коэффициента {c_ball_m2kg[i]}:")
+    t_local_s = t0_s
+    state_vector_local = state_vector_0.copy()
+    times_local = [t_local_s]
+    heights_local = [(np.linalg.norm(state_vector_local[0:3]) - r_earth_m) / 1000]
+    while (np.linalg.norm(state_vector_local[0:3]) - r_earth_m) >= 100e+03:  
+        altitude_km = (np.linalg.norm(state_vector_local[0:3]) - r_earth_m) / 1000 
+        if t_local_s % 15000 == 0:
+            print ("t:", t_local_s, "с,",
+                "x:", round(state_vector_local[0]/1000, 3), "км,",
+                "y:", round(state_vector_local[1]/1000, 3), "км,",
+                "z:", round(state_vector_local[2]/1000, 3), "км,",
+                "Vx:", round(state_vector_local[3], 1), "м/с,",
+                "Vy:", round(state_vector_local[4], 1), "м/с,",
+                "Vz:", round(state_vector_local[5], 1), "м/с,",
                 "h:", round(altitude_km, 3), "км;")
-        state_vector_i1 = RK4(t_i1_s, dt_s, state_vector_i1, i)
-        t_i1_s = t_i1_s + dt_s
-        heights.append(altitude_km)
-        times.append(t_i1_s)
-    print ("t:", t_i1_s, "с,",
-                "x:", round(state_vector_i1[0]/1000, 3), "км,",
-                "y:", round(state_vector_i1[1]/1000, 3), "км,",
-                "z:", round(state_vector_i1[2]/1000, 3), "км,",
-                "Vx:", round(state_vector_i1[3], 1), "м/с,",
-                "Vy:", round(state_vector_i1[4], 1), "м/с,",
-                "Vz:", round(state_vector_i1[5], 1), "м/с,",
+        state_vector_local = RK4(t_local_s, dt_s, state_vector_local, i)
+        t_local_s = t_local_s + dt_s
+        heights_local.append(altitude_km)
+        times_local.append(t_local_s)
+    print ("t:", t_local_s, "с,",
+                "x:", round(state_vector_local[0]/1000, 3), "км,",
+                "y:", round(state_vector_local[1]/1000, 3), "км,",
+                "z:", round(state_vector_local[2]/1000, 3), "км,",
+                "Vx:", round(state_vector_local[3], 1), "м/с,",
+                "Vy:", round(state_vector_local[4], 1), "м/с,",
+                "Vz:", round(state_vector_local[5], 1), "м/с,",
                 "h:", round(altitude_km, 3), "км;")
-    print (f'Время существования КА на высотах выше 100 км: {t_i1_s}') 
-    t_i1_s = t0_s
-    state_vector_i1 = state_vector_0.copy()
+    print (f'Время существования КА на высотах выше 100 км: {t_local_s}') 
+    return np.array(times_local, dtype=np.float64), np.array(heights_local, dtype=np.float64)
 
 check_step_size(dt_s)
 traj_points_np = []
 times_np = []
 heights_np = []
 
-for i in range(0, c_ball_m2kg.size - 1):
-    traj_points_np.append(np.array(math_model_decline_by_10km(i), dtype=np.float64))
-    math_model_flight_over_100km(i)
-    times_np.append(times)
-    heights_np.append(heights)
+for i in range(c_ball_m2kg.size):
+   # traj_points_np.append(math_model_decline_by_10km(i))
+    times_i, heights_i = math_model_flight_over_100km(i)
+    times_np.append(times_i / 3600 / 24)
+    heights_np.append(heights_i)
 
 plt.figure()
-plt.xlabel("t, s")
-plt.ylabel("h, km")
+plt.xlabel("Время, сутки")
+plt.ylabel("Высота орбиты, км")
 plt.minorticks_on()
-plt.xlim([0., 10e6])
+plt.xlim([0., 140.])
 plt.ylim([100., 300.])
 plt.grid(which = 'major')
 plt.grid(which = 'minor', linestyle = ':')
-for i in range(0, c_ball_m2kg.size - 1):
-    plt.plot(times_np[i], heights_np[i], label = f"Баллистический коэффициент' = {c_ball_m2kg[i]} м^2/кг")
+for i in range(c_ball_m2kg.size):
+    plt.plot(times_np[i], heights_np[i], label = f"Баллистический коэффициент = {c_ball_m2kg[i]} м²/кг")
+plt.axhline(y=272.0, color='k', linestyle='--', linewidth=1.0, label="Высота в 272 км")
 plt.legend()
-plt.title("Зависимость высоты от времени для различных баллистических коэффициентов")
+plt.title("Зависимость высоты орбиты от времени для различных баллистических коэффициентов")
 
-ax = plt.figure().add_subplot(111, projection='3d')
-plt.xlabel("x, km")
-plt.ylabel("y, km")
-ax.set_zlabel("z, km")
-for i in range(0, c_ball_m2kg.size - 1):
-    all_coordinates_km = traj_points_np[i][:, 0:3] / 1000
-    ax.plot(
-        all_coordinates_km[:, 0],
-        all_coordinates_km[:, 1], 
-        all_coordinates_km[:, 2],
-        label = f"Баллистический коэффициент' = {c_ball_m2kg[i]} м^2/кг"
-    )   
-ax.legend()   
-plt.axis('equal')
-plt.grid()
-plt.title("Траектории движения КА для различных баллистических коэффициентов")
+plt.figure()
+plt.xlabel("Время, сутки")
+plt.ylabel("Высота орбиты, км")
+plt.minorticks_on()
+plt.xlim([0., 70.])
+plt.ylim([260., 290.])
+plt.grid(which = 'major')
+plt.grid(which = 'minor', linestyle = ':')
+for i in range(c_ball_m2kg.size):
+    plt.plot(times_np[i], heights_np[i], label = f"Баллистический коэффициент = {c_ball_m2kg[i]} м²/кг")
+plt.axhline(y=272.0, color='k', linestyle='--', linewidth=1.0, label="Высота в 272 км")
+plt.legend()
+plt.title("Зависимость высоты орбиты от времени для различных баллистических коэффициентов")
+
+# ax = plt.figure().add_subplot(111, projection='3d')
+# plt.xlabel("x, km")
+# plt.ylabel("y, km")
+# ax.set_zlabel("z, km")
+# for i in range(c_ball_m2kg.size):
+#     all_coordinates_km = traj_points_np[i][:, 0:3] / 1000
+#     ax.plot(
+#         all_coordinates_km[:, 0],
+#         all_coordinates_km[:, 1], 
+#         all_coordinates_km[:, 2],
+#         label = f"Баллистический коэффициент = {c_ball_m2kg[i]} м^2/кг"
+#     )   
+# ax.legend()   
+# plt.axis('equal')
+# plt.grid()
+# plt.title("Траектории движения КА для различных баллистических коэффициентов")
 
 plt.show()

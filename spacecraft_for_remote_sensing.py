@@ -5,14 +5,6 @@ r_earth_km = 6371               # средний радиус Земли
 mu_km3_s2 = 3.986e5             # гравитационный параметр Земли
 wavelength_m = 1550e-9          # длина волны излучения (ИК, C-band)
 speed_of_light_m_s = 299792458  # скорость света
-k = 1.380609e-23                # постоянная Больцмана в Дж/К
-
-alpha_km_1 = 0.1                     # коэффициент поглощения в атмосфере в дБ/км для ИК-диапазона (км-1)
-beta_km_1 = 0.15                     # коэффициент рассеяния в атмосфере (эмпирическое значение для городского загрязнения атмосферы, км-1)
-rain_rate_mm_per_hr = 5              # интенсивность дождя в мм/ч
-emp_coeff_1 = 0.2                    # эмпирический коэффициент для расчёта затухания при дожде
-emp_coeff_2 = 0.8                    # эмпирический коэффициент для расчёта затухания при дожде
-
 
 ''' I. Расчёт основных характеристик ДЗЗ '''
 
@@ -101,154 +93,255 @@ print(f"объём информации, передаваемый за {interval
 print()
 
 
-''' II. Оценка бюджета лазерной линии связи КА-Земля '''
-
-''' Характеристики линии связи КА с наземной станцией '''
-epsilon_min_grad = 5.0                                                         # минимальный угол места (видимости) КА в градусах
-epsilon_min_rad = math.radians(epsilon_min_grad)                               # минимальный угол места (видимости) КА в радианах
-
-tx_freq_Hz = speed_of_light_m_s / wavelength_m          # частота передачи данных 
-
-space_telescope_diam_m = 5e-2                                   # диаметр телескопа на КА для приёма/передачи лазерного сигнала
-gs_aperture_usage_coeff = 0.6                                   # коэффициент использования апертуры наземной приеёмной станции
-space_aperture_usage_coeff = 0.6                                # коэффициент использования апертуры телескопа КА (учёт центрального отверстия и других потерь)      
-space_efficiency = 0.85                                         # КПД телескопа на КА (учёт потерь в оптической системе, неидеальной отражающей поверхности и других факторов)
-gs_efficiency = 0.8                                             # КПД телескопа наземной приёмной станции    
-space_pointing_error_rad = 5e-6                                 # ошибка наведения лазерного терминала КА
-gs_pointing_error_rad = 5e-6                                    # ошибка наведения телескопа наземной станции 
-gs_telescope_diam_m = 0.5                                       # диаметр телескопа наземной станции для приёма лазерного сигнала
-                                       
-space_laser_tx_power_mW = 1e3                            # мощность лазерного передатчика на КА в мВт
-space_laser_tx_power_dBm = 10 * math.log10(              # мощность лазерного передатчика на КА в дБм (относительно 1 мВт)
-    space_laser_tx_power_mW
-)   
-
-photons_per_bit_dB = 10 * math.log10(1000)                      # требуемое количество фотонов на бит 
-
-''' Определение бюджета лазерной линии '''
-
-''' Определение геометрических характеристик видимости КА с наземной станции '''
-eta_max_rad = math.asin(                                                            # максимальный надирный угол, при котором КА всё ещё виден с наземной станции
-    (r_earth_km / (r_earth_km + altitude_km)) * math.cos(epsilon_min_rad)
+# =============================================================================
+# II. Оценка бюджета лазерной линии связи КА–Земля
+#
+# Методология: Giggenbach et al., "Link Budget Calculation in Optical LEO
+# Satellite Downlinks with On/Off-Keying and Large Signal Divergence"
+#
+# Суммарный бюджет (формула 1 из статьи):
+#   p_Rx = p_Tx + a_Tx + g_Tx + a_BW + a_FSL + a_Atm + a_Sci + g_Rx + a_Rx
+#
+# Усиление передающего телескопа определяется через угол расходимости пучка
+# (формула 10), а не через площадь апертуры и частоту (это формула для СВЧ).
+# Чувствительность приёмника задаётся числом фотонов на бит (формула 20),
+# а не через шумовую температуру (это подход для СВЧ).
+# =============================================================================
+ 
+print("---------------------------------------------")
+print("Бюджет лазерной линии связи КА–Земля")
+print("---------------------------------------------")
+ 
+# ── Исходные параметры линии связи ───────────────────────────────────────────
+ 
+epsilon_min_grad = 5.0                              # минимальный угол места (°)
+epsilon_min_rad  = math.radians(epsilon_min_grad)
+ 
+space_laser_tx_power_W   = 1.0                      # мощность лазерного передатчика на КА, Вт
+space_laser_tx_power_mW  = space_laser_tx_power_W * 1e3
+space_laser_tx_power_dBm = 10 * math.log10(space_laser_tx_power_mW)
+ 
+# Диаметры телескопов
+space_telescope_diam_m = 5e-2                       # диаметр передающего телескопа КА, м (50 мм)
+gs_telescope_diam_m    = 0.5                        # диаметр приёмного телескопа наземной станции, м (500 мм)
+ 
+# КПД оптических трактов
+space_efficiency = 0.85                             # КПД передающего оптического тракта КА (aTx в линейном виде)
+gs_efficiency    = 0.80                             # КПД приёмного оптического тракта НС    (aRx в линейном виде)
+ 
+# Коэффициент использования апертуры (учёт центрального экранирования и обрезки пучка)
+space_aperture_usage_coeff = 0.60
+gs_aperture_usage_coeff    = 0.60
+ 
+# Ошибки наведения (среднеквадратические, в радианах)
+space_pointing_error_sigma_rad = 5e-6               # σ_BW для лазерного терминала КА
+gs_pointing_error_sigma_rad    = 5e-6               # σ для наземной станции (учитывается отдельно)
+ 
+# Параметры чувствительности приёмника (Giggenbach, формула 20 и Таблица IV)
+photons_per_bit = 250                               # типовое значение для оптимизированного InGaAs-APD при BER=1e-3
+ 
+# Параметр атмосферного ослабления: зенитный коэффициент пропускания Tz
+# Из Таблицы II статьи Giggenbach: λ=1550 нм, уровень моря, тропики/городская застройка → Tz=0.891
+# Это наихудший сценарий (сценарий B). Для высокогорной чистой атмосферы (сценарий A): Tz=0.986
+Tz = 0.891                                          # зенитный коэффициент пропускания атмосферы (линейный)
+ 
+# Потери на турбулентные замирания (aSci) — принимаются равными нулю при усреднении
+# за 100 мс (единичное среднее), как в примере Giggenbach (Таблица V)
+a_sci_dB = 0.0
+ 
+# Потери в оптическом тракте наведения и расщепителях внутри НС (aRx, кроме эффективности телескопа)
+a_rx_internal_dB = -4.1                             # по аналогии с Таблицей V (SOFA)
+ 
+# ── 1. Геометрия: максимальная дальность при минимальном угле места ──────────
+#
+# Из треугольника КА–НС–центр Земли (Giggenbach, формула 14, упрощение при HGS≈0):
+#   L = sqrt((RE·sin(ε))² + 2·H0·RE + H0²) − RE·sin(ε)
+# где H0 = altitude_km, RE = r_earth_km, ε = epsilon_min_rad
+ 
+H0 = altitude_km
+RE = r_earth_km
+ 
+L_max_km = (
+    math.sqrt((RE * math.sin(epsilon_min_rad))**2 + 2 * H0 * RE + H0**2)
+    - RE * math.sin(epsilon_min_rad)
 )
-lambda_max_rad = math.pi / 2 - eta_max_rad - epsilon_min_rad                        # максимальный центральный угол, при котором КА всё ещё виден с наземной станции
-distance_max_km = r_earth_km * (math.sin(lambda_max_rad) / math.sin(eta_max_rad))   # максимальное расстояние от КА до наземной станции
-
-''' Потери в атмосфере '''
-rain_coeff = emp_coeff_1 * rain_rate_mm_per_hr ** emp_coeff_2                           # коэффициент затухания при дожде в дБ/км (эмпирическая формула, зависящая от интенсивности дождя и частоты)
-optical_depth = beta_km_1 * distance_max_km                                             # оптическая толщина атмосферы для данного расстояния
-atm_scattering_loss_dB = 10 * math.log10(math.exp(alpha_km_1 * distance_max_km))        # потери на рассеяние в атмосфере (из закона Бугера-Ламберта, с коэффициентом рассеяния 0.15 км-1 для городского загрязнения атмосферы)
-atm_absorption_loss_dB = 10 * math.log10(math.exp(alpha_km_1 * distance_max_km))        # потери на поглощение в атмосфере (из закона Бугера-Ламберта, с коэффициентом поглощения 0.1 дБ/км для ИК-диапазона)
-atm_turbulence_loss_dB = 2                                                              # потери на турбулентность в атмосфере    
-light_rain_loss_dB = rain_coeff * distance_max_km                                       # потери при умеренном дожде (эмпирическая формула, зависящая от высоты)    
-cloud_attenuation_loss_dB = 200                                                         # потери при облачности (эмпирическое значение для умеренной облачности, может сильно варьироваться в зависимости от плотности облаков и частоты)
-
-atm_loss_dB = atm_scattering_loss_dB                                                    # суммарные потери в атмосфере 
-+ atm_absorption_loss_dB 
-+ atm_turbulence_loss_dB 
-+ light_rain_loss_dB 
-+ cloud_attenuation_loss_dB
-
-''' Потери в оптическом тракте '''
-optical_channel_loss_dB = 5                                     # потери в оптическом тракте 
-
-''' Расчёт характеристик телескопа на КА '''
-space_telescope_geom_area_m2 = math.pi * (space_telescope_diam_m ** 2)/ 4                   # геометрическая площадь телескопа на КА                                  
-space_telescope_eff_area_m2 = space_aperture_usage_coeff * space_telescope_geom_area_m2     # эффективная площадь телескопа на КА с учётом коэффициента использования апертуры
-space_telescope_eff_diam_m = math.sqrt(4 * space_telescope_eff_area_m2 / math.pi)           # эффективный диаметр телескопа на КА
-
-space_telescope_directivity = space_telescope_eff_area_m2 * 4 * math.pi * (                 # направленность телескопа на КА 
-    tx_freq_Hz / speed_of_light_m_s
-) ** 2                
-space_telescope_directivity_dB = 10 * math.log10(space_telescope_directivity)               # направленность телескопа на КА в дБ
-
-space_telescope_gain = space_efficiency * space_telescope_directivity                       # усиление телескопа на КА                                         
-space_telescope_gain_dB = 10 * math.log10(space_telescope_gain)                             # усиление телескопа на КА в дБ
-
-''' Расчёт характеристик телескопа на наземной станции '''
-gs_telescope_geom_area_m2 = math.pi * (gs_telescope_diam_m ** 2) / 4                        # геометрическая площадь телескопа наземной станции
-gs_telescope_eff_area_m2 = gs_aperture_usage_coeff * gs_telescope_geom_area_m2              # эффективная площадь телескопа наземной станции с учётом коэффициента использования апертуры
-gs_telescope_eff_diam_m = math.sqrt(4 * gs_telescope_eff_area_m2 / math.pi)                 # эффективный диаметр телескопа наземной станции
-
-gs_telescope_directivity = gs_telescope_eff_area_m2 * 4 * math.pi * (                       # направленность телескопа наземной станции
-    tx_freq_Hz / speed_of_light_m_s
-) ** 2        
-gs_telescope_directivity_dB = 10 * math.log10(gs_telescope_directivity)                     # направленность телескопа наземной станции в дБ 
-
-gs_telescope_gain = gs_efficiency * gs_telescope_directivity                                # усиление телескопа наземной станции
-gs_telescope_gain_dB = 10 * math.log10(gs_telescope_gain)                                   # усиление телескопа наземной станции в дБ
-
-''' Расчёт потерь на ошибку наведения лазерного терминала КА '''
-theta_spacecraft_rad = wavelength_m / space_telescope_eff_diam_m                            # ширина диаграммы направленности лазерного терминала КА
-space_pointing_loss_dB = 12 * (space_pointing_error_rad / theta_spacecraft_rad) ** 2        # потери на ошибку наведения лазерного терминала КА
-
-''' Расчёт потерь на ошибку наведения телескопа наземной станции '''
-theta_ground_rad = wavelength_m / gs_telescope_eff_diam_m                                   # ширина диаграммы направленности телескопа наземной станции
-gs_pointing_loss_dB = 12 * (gs_pointing_error_rad / theta_ground_rad) ** 2                  # потери на ошибку наведения телескопа наземной станции 
-
-''' Расчёт сигнала и потерь на трассе '''
-loss_in_free_space_dB = 20 * math.log10(distance_max_km * 1000 * 4 * math.pi / wavelength_m)        # потери в свободном пространстве в дБ
-
-rx_signal_power_dBm = (space_laser_tx_power_dBm + space_telescope_gain_dB + gs_telescope_gain_dB    # мощность сигнала на входе приёмника в дБм с учётом всех усилений и потерь
-            - space_pointing_loss_dB - gs_pointing_loss_dB -
-            - atm_loss_dB - optical_channel_loss_dB
-            - loss_in_free_space_dB)
-
-T_na_K = 100000                                 # шумовая температура приёмника в К (эмпирическая формула, зависящая от эффективного диаметра приёмного телескопа и угла места)
-T_na_dBK = 10 * math.log10(T_na_K)                                                                  # шумовая температура приёмника в дБК
-
-k_dBm_per_Hz_K = 10 * math.log10(k * 1000)                                                          # постоянная Больцмана в дБм/Гц/К (перевод в мВт)   
-
-data_flow_dB = 10 * math.log10(data_flow_megabit_s)                                                 # частота передачи данных в дБ
-
-required_rx_signal_power_dBm = k_dBm_per_Hz_K + T_na_dBK + data_flow_dB + photons_per_bit_dB     # требуемый уровень сигнала на входе приёмника в дБм для обеспечения требуемого Eb/N0 с учётом шумовой температуры и частоты передачи данных
-
-margin_dB = rx_signal_power_dBm - required_rx_signal_power_dBm                                      # бюджет линии (запас) в дБ
-
-print("---------------------------------------------")
-print("Бюджет лазерной линии связи")
-print("---------------------------------------------")
-print(f": {space_laser_tx_power_dBm:.3f} дБм")
-print(f"минимальный угол места: {math.degrees(epsilon_min_rad):.2f}°")
-print(f"максимальный центральный угол: {lambda_max_rad:.6f} рад")
-print(f"максимальная дальность: {distance_max_km:.3f} км")
-print(f"частота передачи: {tx_freq_Hz:.3e} Гц")
+L_max_m = L_max_km * 1e3
+ 
+print(f"минимальный угол места: {epsilon_min_grad:.1f}°")
+print(f"максимальная дальность (при ε_min): {L_max_km:.3f} км")
 print()
-print("--- Телескоп КА ---")
-print(f"диаметр телескопа КА: {space_telescope_diam_m*1000:.1f} мм")
-print(f"геометрическая площадь космического телескопа: {space_telescope_geom_area_m2:.3f} м²")
-print(f"эффективная площадь телескопа КА: {space_telescope_eff_area_m2:.3e} м²")
-print(f"эффективный диаметр телескопа КА: {space_telescope_eff_diam_m*1000:.1f} мм")
-print(f"направленность телескопа КА: {space_telescope_directivity:.3e} (раз), или {space_telescope_directivity_dB:.3f} дБ")
-print(f"усиление телескопа КА: {space_telescope_gain} (раз), или {space_telescope_gain_dB:.3f} дБ")
-print(f"потери на ошибку наведения КА: {space_pointing_loss_dB:.3f} дБ")
+ 
+# ── 2. Потери в свободном пространстве — формула (13) Giggenbach ─────────────
+#
+#   a_FSL = 10·log10( (λ / (4π·L))² )
+#         = 20·log10( λ / (4π·L) )       [отрицательное значение]
+ 
+a_FSL_dB = 20 * math.log10(wavelength_m / (4 * math.pi * L_max_m))
+ 
+print(f"--- Потери в свободном пространстве ---")
+print(f"a_FSL = {a_FSL_dB:.3f} дБ")
 print()
-print("--- Телескоп наземной станции ---")
-print(f"диаметр наземного телескопа: {gs_telescope_diam_m:.2f} м")
-print(f"геометрическая площадь наземного телескопа: {gs_telescope_geom_area_m2:.3f} м²")
-print(f"эффективная площадь наземного телескопа: {gs_telescope_eff_area_m2:.3f} м²")
-print(f"эффективный диаметр наземного телескопа: {gs_telescope_eff_diam_m:.3f} м")
-print(f"направленность наземного телескопа: {gs_telescope_directivity:.3e} (раз)")
-print(f"усиление наземного телескопа: {gs_telescope_gain_dB:.3f} дБ")
-print(f"потери на ошибку наведения НС: {gs_pointing_loss_dB:.3f} дБ")
+ 
+# ── 3. Атмосферное ослабление — формула (16) Giggenbach ─────────────────────
+#
+#   a_Atm = 10·log10( Tz^(1/sin(ε)) )
+# При ε = epsilon_min_rad это наихудший (наибольший) случай ослабления.
+ 
+a_Atm_dB = 10 * math.log10(Tz ** (1.0 / math.sin(epsilon_min_rad)))
+ 
+print(f"--- Атмосферное ослабление ---")
+print(f"зенитный коэффициент пропускания Tz: {Tz}")
+print(f"a_Atm при ε={epsilon_min_grad}°: {a_Atm_dB:.3f} дБ")
 print()
-print("--- Потери на трассе ---")
-print(f"потери в свободном пространстве: {loss_in_free_space_dB:.3f} дБ")
-print(f"потери в атмосфере: {atm_loss_dB:.3f} дБ")
-print(f"потери при лёгком дожде: {light_rain_loss_dB:.3f} дБ")
-print(f"потери в оптическом тракте: {optical_channel_loss_dB:.3f} дБ")
+ 
+# ── 4. Передающий телескоп КА ────────────────────────────────────────────────
+#
+# Угол расходимости гауссова пучка по уровню 1/e² (формула 8 Giggenbach):
+#   θ_e-2 = 2λ / (π · ω0)
+# где ω0 = D_e-2 / 2 — радиус пучка на выходе.
+#
+# Соотношение апертуры и диаметра пучка (раздел III.A Giggenbach):
+#   D_Tx = √2 · D_e-2  →  D_e-2 = D_Tx / √2
+#   ω0 = D_e-2 / 2 = D_Tx / (2√2)
+#
+# Перевод в FWHM (формула 9):
+#   θ_FWHM = √(ln2/2) · θ_e-2
+#
+# Усиление передающей антенны (формула 10):
+#   g_Tx = 10·log10( (4·√2 / θ_e-2)² )
+#        = 10·log10( (4·√(ln2) / θ_FWHM)² )
+ 
+# Эффективный диаметр пучка с учётом коэффициента использования апертуры
+space_D_e2_m = space_telescope_diam_m / math.sqrt(2)   # диаметр пучка на уровне 1/e²
+space_omega0_m = space_D_e2_m / 2                       # радиус пучка ω0
+ 
+theta_e2_rad   = 2 * wavelength_m / (math.pi * space_omega0_m)           # полный угол расходимости 1/e²
+theta_FWHM_rad = math.sqrt(math.log(2) / 2) * theta_e2_rad               # угол расходимости FWHM
+ 
+# Усиление передающей антенны (Giggenbach, формула 10)
+g_Tx_dB = 10 * math.log10((4 * math.sqrt(2) / theta_e2_rad) ** 2)
+ 
+# Внутренние потери передатчика (КПД оптического тракта)
+a_Tx_dB = 10 * math.log10(space_efficiency)             # отрицательное значение
+ 
+print(f"--- Передающий телескоп КА ---")
+print(f"диаметр телескопа: {space_telescope_diam_m*1e3:.1f} мм")
+print(f"D_e-2 (диаметр пучка 1/e²): {space_D_e2_m*1e3:.2f} мм")
+print(f"ω0 (радиус пучка): {space_omega0_m*1e3:.2f} мм")
+print(f"θ_e-2 (угол расходимости 1/e²): {theta_e2_rad*1e6:.2f} мкрад")
+print(f"θ_FWHM (угол расходимости FWHM): {theta_FWHM_rad*1e6:.2f} мкрад")
+print(f"усиление передающей антенны g_Tx: {g_Tx_dB:.3f} дБ")
+print(f"внутренние потери передатчика a_Tx: {a_Tx_dB:.3f} дБ")
 print()
-print("--- Мощность сигнала ---")
-print(f"суммарная мощность на входе приёмника: {rx_signal_power_dBm:.3f} дБм")
+ 
+# ── 5. Потери на ошибку наведения — формула (11)–(12) Giggenbach ─────────────
+#
+# Параметр β (соотношение угла расходимости и ошибки наведения):
+#   β = (θ_FWHM)² / (4·ln2·σ_BW²)
+#
+# Средние потери на ошибку наведения:
+#   a_BW = 10·log10( β / (β+1) )
+ 
+beta_BW = (theta_FWHM_rad ** 2) / (4 * math.log(2) * space_pointing_error_sigma_rad ** 2)
+a_BW_dB = 10 * math.log10(beta_BW / (beta_BW + 1))
+ 
+print(f"--- Потери на ошибку наведения КА ---")
+print(f"σ_BW (ошибка наведения КА): {space_pointing_error_sigma_rad*1e6:.2f} мкрад")
+print(f"β (параметр бета-распределения): {beta_BW:.2f}")
+print(f"a_BW (потери на ошибку наведения): {a_BW_dB:.3f} дБ")
 print()
-print("--- Требуемый уровень сигнала ---")
-print(f"шумовая температура приёмника: {T_na_K:.3f} К ({T_na_dBK:.3f} дБК)")
-print(f"постоянная Больцмана: {k_dBm_per_Hz_K:.3f} дБм/Гц/К")
-print(f"требуемое Eb/N0: {photons_per_bit_dB:.1f} дБ")
-print(f"требуемый уровень сигнала на входе: {required_rx_signal_power_dBm:.3f} дБм")
+ 
+# ── 6. Приёмный телескоп наземной станции — формула (18) Giggenbach ──────────
+#
+#   g_Rx = 10·log10( 4π·A_Rx / λ² )
+# где A_Rx — эффективная площадь апертуры приёмного телескопа.
+#
+# Для телескопа Кассегрена учитывается центральное экранирование
+# через коэффициент использования апертуры gs_aperture_usage_coeff.
+ 
+gs_geom_area_m2 = math.pi * (gs_telescope_diam_m ** 2) / 4
+gs_eff_area_m2  = gs_aperture_usage_coeff * gs_geom_area_m2
+ 
+g_Rx_dB = 10 * math.log10((4 * math.pi * gs_eff_area_m2) / (wavelength_m ** 2))
+ 
+# Внутренние потери приёмного тракта (КПД телескопа + расщепитель и пр.)
+a_Rx_dB = 10 * math.log10(gs_efficiency) + a_rx_internal_dB
+ 
+print(f"--- Приёмный телескоп наземной станции ---")
+print(f"диаметр телескопа НС: {gs_telescope_diam_m*1e2:.0f} см")
+print(f"геометрическая площадь: {gs_geom_area_m2:.4f} м²")
+print(f"эффективная площадь A_Rx: {gs_eff_area_m2:.4f} м²")
+print(f"усиление приёмной антенны g_Rx: {g_Rx_dB:.3f} дБ")
+print(f"внутренние потери приёмного тракта a_Rx: {a_Rx_dB:.3f} дБ")
 print()
-print(f"бюджет линии (запас): {margin_dB:.3f} дБ")
+ 
+# ── 7. Суммарный бюджет линии — формула (1) Giggenbach ───────────────────────
+#
+#   p_Rx = p_Tx + a_Tx + g_Tx + a_BW + a_FSL + a_Atm + a_Sci + g_Rx + a_Rx
+#
+# Все величины в дБ/дБм; усиления положительны, потери отрицательны.
+ 
+p_Rx_dBm = (space_laser_tx_power_dBm
+            + a_Tx_dB
+            + g_Tx_dB
+            + a_BW_dB
+            + a_FSL_dB
+            + a_Atm_dB
+            + a_sci_dB
+            + g_Rx_dB
+            + a_Rx_dB)
+ 
+print(f"--- Суммарный бюджет ---")
+print(f"мощность передатчика p_Tx:          {space_laser_tx_power_dBm:+.3f} дБм")
+print(f"внутренние потери передатчика a_Tx:  {a_Tx_dB:+.3f} дБ")
+print(f"усиление передающей антенны g_Tx:   {g_Tx_dB:+.3f} дБ")
+print(f"потери на ошибку наведения a_BW:    {a_BW_dB:+.3f} дБ")
+print(f"потери в своб. пространстве a_FSL:  {a_FSL_dB:+.3f} дБ")
+print(f"атмосферное ослабление a_Atm:       {a_Atm_dB:+.3f} дБ")
+print(f"потери на замирания a_Sci:           {a_sci_dB:+.3f} дБ")
+print(f"усиление приёмной антенны g_Rx:     {g_Rx_dB:+.3f} дБ")
+print(f"внутренние потери приёмника a_Rx:   {a_Rx_dB:+.3f} дБ")
+print(f"мощность на детекторе p_Rx:         {p_Rx_dBm:+.3f} дБм")
+print()
+ 
+# ── 8. Требуемая мощность сигнала — формула (20) Giggenbach ──────────────────
+#
+# Для оптимизированного InGaAs-APD при BER=1e-3 (достаточно для FEC):
+#   P_1E-3 = N_ppb · R · h·c/λ
+# где:
+#   N_ppb — число фотонов на бит
+#   R     — скорость передачи данных, бит/с
+#   h     — постоянная Планка
+#   c     — скорость света
+#   λ     — длина волны
+h_planck = 6.62607015e-34           # постоянная Планка, Дж·с
+
+data_rate_bps = data_flow_megabit_s * 1e6           # скорость передачи данных, бит/с
+energy_per_photon_J = h_planck * speed_of_light_m_s / wavelength_m   # энергия фотона, Дж
+ 
+P_required_W   = photons_per_bit * data_rate_bps * energy_per_photon_J
+P_required_mW  = P_required_W * 1e3
+P_required_dBm = 10 * math.log10(P_required_mW)
+ 
+print(f"--- Требуемая мощность сигнала ---")
+print(f"скорость передачи данных: {data_rate_bps/1e6:.3f} Мбит/с")
+print(f"энергия фотона при λ=1550 нм: {energy_per_photon_J:.4e} Дж")
+print(f"число фотонов на бит (N_ppb): {photons_per_bit} (для BER=1e-3, InGaAs-APD)")
+print(f"требуемая мощность P_1E-3: {P_required_W*1e9:.4f} нВт  ({P_required_dBm:.3f} дБм)")
+print()
+ 
+# ── 9. Энергетический запас линии ────────────────────────────────────────────
+ 
+margin_dB = p_Rx_dBm - P_required_dBm
+ 
+print(f"--- Энергетический запас ---")
+print(f"мощность на детекторе:   {p_Rx_dBm:.3f} дБм")
+print(f"требуемая мощность:      {P_required_dBm:.3f} дБм")
+print(f"запас энергетики линии:  {margin_dB:.3f} дБ")
+print()
+ 
 if margin_dB > 0:
-    print("✅ запас положительный, связь возможна")
+    print("✅ Запас положительный — связь возможна")
 else:
-    print("❌ запас отрицательный, требуется увеличение мощности или уменьшение потерь")
+    print("❌ Запас отрицательный — требуется увеличение мощности,")
+    print("   увеличение апертуры телескопа или уменьшение потерь")
