@@ -9,7 +9,7 @@ speed_of_light_m_s = 299792458  # скорость света
 ''' I. Расчёт основных характеристик ДЗЗ '''
 
 ''' Характеристики камеры и матрицы для ДЗЗ '''
-fov_deg = 6.0                   # поле зрения камеры ДЗЗ
+fov_deg = 6.0                   # круговое поле зрения камеры ДЗЗ
 ccd_size = [12000, 1]           # размер ПЗС-матрицы в пикселях
 pixel_size_m = 6.5e-6           # размер пикселя ПЗС
 focal_length_m = 0.8            # фокусное расстояние камеры
@@ -30,14 +30,14 @@ epsilon_rad = math.acos(                                                # раб
 )
 lambda_rad = math.pi / 2 - eta_rad - epsilon_rad                        # центральный угол
 
-fov_total_length_eta_km = 2 * eta_rad * altitude_km                     # ширина полосы обзора по надирному углу
-fov_total_length_lambda_km = 2 * lambda_rad * r_earth_km                # ширина полосы обзора по центральному углу
+fov_length_eta_km = 2 * eta_rad * altitude_km                     # ширина полосы захвата по надирному углу
+fov_length_lambda_km = 2 * lambda_rad * r_earth_km                # ширина полосы захвата по центральному углу
 
 ccd_x_size_mm = pixel_size_m * ccd_size[0] * 1000                       # поперечный размер матрицы (x)
 ccd_y_size_mm = pixel_size_m * ccd_size[1] * 1000                       # продольный размер матрицы (y)
 
 ifov_x_rad = ccd_x_size_mm / (1000 * focal_length_m)                    # (мгновенное) поперечное поле зрения
-ifov_y_rad = ccd_y_size_mm / (1000 * focal_length_m)                    # (мгновенное) поперечное поле зрения
+ifov_y_rad = ccd_y_size_mm / (1000 * focal_length_m)                    # (мгновенное) продольное поле зрения
 
 image_x_size_km = ifov_x_rad * altitude_km                              # поперечный размер кадра
 image_y_size_km = ifov_y_rad * altitude_km                              # продольный размер кадра
@@ -60,17 +60,17 @@ data_per_interval_megabit = data_flow_megabit_s * interval_s            # объ
 
 ''' Вывод данных в консоль '''
 print()
-print("---------------------------------------------")
-print("Расчёт основных характеристик ДЗЗ")
-print("---------------------------------------------")
+print("=" * 60)
+print("I. РАСЧЁТ ОСНОВНЫХ ХАРАКТЕРИСТИК ДЗЗ")
+print("=" * 60)
 print(f"высота орбиты КА: {altitude_km:.3f} км")
 print()
 print(f"надирный угол: {eta_rad:.6f} рад")
 print(f"рабочий угол места: {epsilon_rad:.6f} рад")
 print(f"центральный угол: {lambda_rad:.6f} рад")
 print()
-print(f"ширина полосы обзора по надирному углу: {fov_total_length_eta_km:.6f} км")
-print(f"ширина полосы обзора по центральному углу: {fov_total_length_lambda_km:.6f} км")
+print(f"ширина полосы захвата по надирному углу: {fov_length_eta_km:.6f} км")
+print(f"ширина полосы захвата по центральному углу: {fov_length_lambda_km:.6f} км")
 print()
 print(f"поперечный размер матрицы (x): {ccd_x_size_mm:.3e} мм")
 print(f"продольный размер матрицы (y): {ccd_y_size_mm:.3e} мм")
@@ -332,9 +332,9 @@ print(f"\n  5.1 Геометрия орбиты")
 print(f"  Высота орбиты:                    {H0:.2f} км")
 print(f"  Период обращения:                 {period_s:.2f} с  ({period_s/60:.3f} мин)")
 print(f"  Витков в сутки:                   {cycles}")
-print(f"  Расстояние между трассами:        {track_sep_km:.1f} км")
-print(f"  Ширина съёмочной полосы:          {fov_total_length_lambda_km:.2f} км")
-print(f"  Перекрытие трасс:                 отсутствует ({track_sep_km/fov_total_length_lambda_km:.0f}× больше полосы)")
+print(f"  Расстояние между трассами:        {track_sep_km:.1f} км")         # OF NO IMPORTANCE HERE
+print(f"  Ширина съёмочной полосы:          {fov_length_lambda_km:.2f} км")
+print(f"  Перекрытие трасс:                 отсутствует ({track_sep_km/fov_length_lambda_km:.0f}× больше полосы)")
  
 print(f"\n  5.2 Длительность сеанса связи")
 print(f"  η_max (макс. надирный угол):      {math.degrees(eta_max_rad):.4f}°")
@@ -346,7 +346,7 @@ print(f"  ║  ДЛИТЕЛЬНОСТЬ СЕАНСА: {t_session_s:.1f} с ({t_s
 print(f"  ╚══════════════════════════════════════════════╝")
 print(f"  (Типовое значение для LEO по Giggenbach: «несколько–10 мин» ✓)")
  
-# ── 5.2 Освещённость: доля орбиты над lit-стороной Земли ─────────────────────
+# ── 5.2 Освещённость: доля протяжённости орбиты над освещённой стороной Земли ─────────────────────
 #
 # Для круговой орбиты при нулевом бета-угле (наихудший случай):
 #   f_eclipse = arccos( sqrt(H0²+2·RE·H0) / (RE+H0) ) / π
@@ -356,6 +356,8 @@ print(f"  (Типовое значение для LEO по Giggenbach: «нес�
  
 f_eclipse  = math.acos(math.sqrt(H0**2 + 2*RE*H0) / (RE + H0)) / math.pi
 f_sunlit   = 1.0 - f_eclipse
+# f_eclipse = 0.5
+# f_sunlit = 1.0 - f_eclipse
 t_sunlit_s = f_sunlit * period_s
 t_eclipse_s = f_eclipse * period_s
  
@@ -367,23 +369,24 @@ print(f"  Доля на свету:    {f_sunlit*100:.2f}%  ({t_sunlit_s:.1f} с
 #
 # КА непрерывно снимает, пока:
 #   (а) находится над освещённой стороной Земли
-#   (б) земля попадает в съёмочную полосу шириной fov_total_length_lambda_km
+#   (б) земля попадает в съёмочную полосу шириной fov_length_lambda_km
 #
 # Условие (б) выполняется всегда, пока работает камера (это ограничение
 # на ширину полосы, а не на продолжительность съёмки). Поэтому
 # время активной съёмки = t_sunlit_s за каждый виток.
 #
-# Объём данных, НАКОПЛЕННЫХ за освещённую часть одного витка:
-data_per_lit_pass_Mb = data_flow_megabit_s * t_sunlit_s
+# Объём данных, НАКОПЛЕННЫХ за время съёмки на освещённой части одного витка с учётом прерывистого характера съёмки:
+capturing_frequency = 0.1  # снимаем 1/10 часть всего пролёта над светлой частью.
+data_captured_Mb = data_flow_megabit_s * t_sunlit_s * capturing_frequency
  
-# Длина отснятой полосы за освещённую часть витка:
-strip_length_km = v_shadow_km_s * t_sunlit_s
+# Длина отснятой полосы за освещённую часть витка с учётом прерывистого характера съёмки:
+strip_length_km = v_shadow_km_s * t_sunlit_s * capturing_frequency
  
 # Объём данных, ПЕРЕДАННЫХ за один сеанс (канал работает на полной скорости):
 data_per_session_Mb = data_flow_megabit_s * t_session_s
  
 # Суточное накопление (16 витков):
-data_per_day_Mb = data_per_lit_pass_Mb * cycles
+data_per_day_Mb = data_captured_Mb * cycles
  
 # ── 5.4 Суточный баланс связи ─────────────────────────────────────────────────
 # Для полярной орбиты с повторяющейся трассой каждый наземный пункт
@@ -393,10 +396,10 @@ data_per_day_Mb = data_per_lit_pass_Mb * cycles
  
 print(f"\n  5.4 Данные: накопление и передача")
 print(f"  Поток ДЗЗ:                        {data_flow_megabit_s:.3f} Мбит/с")
-print(f"  Длина снятой полосы (1 виток):    {strip_length_km:.1f} км  ×  {fov_total_length_lambda_km:.2f} км (ширина)")
+print(f"  Длина снятой полосы (1 виток):    {strip_length_km:.1f} км  ×  {fov_length_lambda_km:.2f} км (ширина)")
 print()
 print(f"  За один виток:")
-print(f"    — накоплено данных (свет. дуга):{data_per_lit_pass_Mb:>12.2f} Мбит  ({data_per_lit_pass_Mb/8e3:.3f} ГБ)")
+print(f"    — накоплено данных (свет. дуга):{data_captured_Mb:>12.2f} Мбит  ({data_captured_Mb/8e3:.3f} ГБ)")
 print()
 print(f"  ╔══════════════════════════════════════════════════════════╗")
 print(f"  ║  ОДИН СЕАНС СВЯЗИ  (t_сеанс = {t_session_s:.1f} с = {t_session_s/60:.3f} мин):      ║")
@@ -406,7 +409,7 @@ print(f"  ║  = {data_per_session_Mb/1e3:>12.3f} Гбит                      
 print(f"  ║  = {data_per_session_Mb/8e3:>12.4f} ГБ                                     ║")
 print(f"  ╚══════════════════════════════════════════════════════════╝")
  
-ratio_pass_to_session = data_per_lit_pass_Mb / data_per_session_Mb
+ratio_pass_to_session = data_captured_Mb / data_per_session_Mb
 print(f"\n  Соотношение накоплено/сеанс:      {ratio_pass_to_session:.2f}×")
 print(f"  → Один сеанс передаёт {1/ratio_pass_to_session*100:.1f}% данных одного освещённого витка")
 print(f"  → Для полной разгрузки одного витка нужно {math.ceil(ratio_pass_to_session)} сеанса")
@@ -438,9 +441,9 @@ for label_m, days in [("Мин. ресурс на рабочей орб. (15 с�
     print(f"  {label_m:<38} {acc:>10.1f}     {tx:>10.1f}")
  
 print()
-print("  ВЫВОД: передача данных ограничена не пропускной способностью")
-print(f"  лазерного канала ({data_flow_megabit_s:.0f} Мбит/с, запас по Giggenbach {margin_G:+.1f} дБ),")
-print(f"  а числом сеансов связи в сутки и ёмкостью бортового накопителя.")
-print(f"  Для полной передачи суточного объёма съёмки необходимо не менее")
-print(f"  {math.ceil(data_per_day_Mb/data_per_session_Mb)} сеансов в сутки — что практически недостижимо")
-print(f"  с одной наземной станцией. Рекомендуется сеть из нескольких НС.")
+# print("  ВЫВОД: передача данных ограничена не пропускной способностью")
+# print(f"  лазерного канала ({data_flow_megabit_s:.0f} Мбит/с, запас по Giggenbach {margin_G:+.1f} дБ),")
+# print(f"  а числом сеансов связи в сутки и ёмкостью бортового накопителя.")
+# print(f"  Для полной передачи суточного объёма съёмки необходимо не менее")
+# print(f"  {math.ceil(data_per_day_Mb/data_per_session_Mb)} сеансов в сутки — что практически недостижимо")
+# print(f"  с одной наземной станцией. Рекомендуется сеть из нескольких НС.")

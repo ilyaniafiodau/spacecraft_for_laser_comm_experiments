@@ -5,7 +5,7 @@ import math
 mu_m3s2 = 398600.4415e+09   
 r_earth_m = 6371e+03              
 h0_m = 282e+03                    
-i0_deg = 95.68                     
+i0_deg = 96.58                     
 F107 = 150          
 F81 = F107
 K0 = 1
