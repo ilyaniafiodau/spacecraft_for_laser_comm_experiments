@@ -10,7 +10,7 @@ speed_of_light_m_s = 299792458  # скорость света
 
 ''' Характеристики камеры и матрицы для ДЗЗ '''
 fov_deg = 6.0                   # круговое поле зрения камеры ДЗЗ
-ccd_size = [12000, 1]           # размер ПЗС-матрицы в пикселях
+ccd_size = [6000, 1]            # размер ПЗС-матрицы в пикселях
 pixel_size_m = 6.5e-6           # размер пикселя ПЗС
 focal_length_m = 0.8            # фокусное расстояние камеры
 
@@ -54,9 +54,6 @@ freq_hz = v_shadow_km_s / image_y_size_km                               # час
 data_flow_megabit_s = (                                                 # выходной поток данных
     ccd_size[0] * ccd_size[1] * bits_per_pixel * channel * freq_hz
     ) / 1e6   
-data_per_cycle_megabit = data_flow_megabit_s * period_s                 # объём информации, передаваемый за виток  
-interval_s = 373.248                                                    # временной интервал 
-data_per_interval_megabit = data_flow_megabit_s * interval_s            # объём информации, передаваемый за интервал 8 мин    
 
 ''' Вывод данных в консоль '''
 print()
@@ -88,8 +85,6 @@ print(f"период обращения: {period_s:.2f} с")
 print(f"скорость подспутниковой точки: {v_shadow_km_s:.3f} км/с")
 print(f"частота обновления изображения: {freq_hz:.3f} Гц")
 print(f"выходной поток данных: {data_flow_megabit_s:.3f} Мбит/с")
-print(f"объём информации, передаваемый за виток: {data_per_cycle_megabit:.3f} Мбит")
-print(f"объём информации, передаваемый за {interval_s} c: {data_per_interval_megabit:.3f} Мбит")
 print()
 
 
@@ -122,7 +117,7 @@ gs_efficiency              = 0.80
 space_aperture_usage_coeff = 0.60
 gs_aperture_usage_coeff    = 0.60
  
-space_pointing_sigma_rad = 5e-6       # σ ошибки наведения КА, рад
+space_pointing_sigma_rad = 5e-6       # σ ошибки наведения КА, рад -- характерная для выбранных параметров кубсата величина
  
 a_rx_internal_dB = -4.1              # потери внутри НС (расщепитель и т.д.), дБ [G, Табл. V]
 photons_per_bit  = 250               # фотонов/бит для InGaAs-APD, BER=1e-3 [G, ур. 20]
@@ -396,7 +391,7 @@ data_per_day_Mb = data_captured_Mb * cycles
  
 print(f"\n  5.4 Данные: накопление и передача")
 print(f"  Поток ДЗЗ:                        {data_flow_megabit_s:.3f} Мбит/с")
-print(f"  Длина снятой полосы (1 виток):    {strip_length_km:.1f} км  ×  {fov_length_lambda_km:.2f} км (ширина)")
+print(f"  Размер снятой полосы (1 виток):    {strip_length_km:.1f} км (длина) ×  {fov_length_lambda_km:.2f} км (ширина)")
 print()
 print(f"  За один виток:")
 print(f"    — накоплено данных (свет. дуга):{data_captured_Mb:>12.2f} Мбит  ({data_captured_Mb/8e3:.3f} ГБ)")
