@@ -1,10 +1,13 @@
 import numpy as np
 from matplotlib import pyplot as plt
 import math
+from pathlib import Path
+
+import pandas as pd
 
 mu_m3s2 = 398600.4415e+09   
 r_earth_m = 6371e+03              
-h0_m = 282e+03                    
+h0_m = 281.56e+03                    
 i0_deg = 96.58                     
 F107 = 150          
 F81 = F107
@@ -119,38 +122,57 @@ def check_step_size(dh: np.float64):
     print(f'Интерполированная точка = {interp_point}')
     print(f'Расстояние между конечной и начальной точками восходящего узла, выраженное в метрах = ',
         np.linalg.norm(interp_point - state_vector_0[0:3]))
-    
+
+def _decline_snapshot_row(t_local_s: float, state_vector_local: np.ndarray) -> dict:
+    altitude_km = (np.linalg.norm(state_vector_local[0:3]) - r_earth_m) / 1000
+    velocity_ms = np.linalg.norm(state_vector_local[3:6])
+
+    return {
+        "t, с": t_local_s,
+        "x, км": round(state_vector_local[0] / 1000, 3),
+        "y, км": round(state_vector_local[1] / 1000, 3),
+        "z, км": round(state_vector_local[2] / 1000, 3),
+        "h, км": round(altitude_km, 3),
+        "Vx, м/с": round(state_vector_local[3], 4),
+        "Vy, м/с": round(state_vector_local[4], 4),
+        "Vz, м/с": round(state_vector_local[5], 4),
+        "V, м/с": round(velocity_ms, 4),
+    }
+
+def _print_decline_snapshot(t_local_s: float, state_vector_local: np.ndarray) -> dict:
+    row = _decline_snapshot_row(t_local_s, state_vector_local)
+    print(
+        "t:", row["t, с"], "с,",
+        "x:", row["x, км"], "км,",
+        "y:", row["y, км"], "км,",
+        "z:", row["z, км"], "км,",
+        "h:", row["h, км"], "км,"
+        "Vx:", row["Vx, м/с"], "м/с,",
+        "Vy:", row["Vy, м/с"], "м/с,",
+        "Vz:", row["Vz, м/с"], "м/с,",
+        "V:", row["V, м/с"], "м/с;"
+    )
+    return row
+
 def math_model_decline_by_10km(i: np.int16) -> np.ndarray:
     print(f"Расчёт движения КА при снижении высоты орбиты на 10 км от начальной для баллистического коэффициента {c_ball_m2kg[i]} м^2/кг:")
     t_local_s = t0_s
     state_vector_local = state_vector_0.copy()
     traj_points_local = [state_vector_local.copy()]
-    while (r0_m - np.linalg.norm(state_vector_local[0:3])) < 10e+03:  
-        altitude_km = (np.linalg.norm(state_vector_local[0:3]) - r_earth_m) / 1000    
-        if t_local_s % 5000 == 0:
-            print (
-                "t:", t_local_s, "с,",
-                "x:", round(state_vector_local[0]/1000, 3), "км,",
-                "y:", round(state_vector_local[1]/1000, 3), "км,",
-                "z:", round(state_vector_local[2]/1000, 3), "км,",
-                "Vx:", round(state_vector_local[3], 1), "м/с,",
-                "Vy:", round(state_vector_local[4], 1), "м/с,",
-                "Vz:", round(state_vector_local[5], 1), "м/с,",
-                "h:", round(altitude_km, 3), "км;"
-            )   
-        state_vector_local = RK4(t_local_s, dt_s, state_vector_local, i)   
+    printed_rows = []
+    while (r0_m - np.linalg.norm(state_vector_local[0:3])) < 10e+03:
+        if t_local_s % (24 / 16 * 3600) == 0:
+            printed_rows.append(_print_decline_snapshot(t_local_s, state_vector_local))
+        state_vector_local = RK4(t_local_s, dt_s, state_vector_local, i)
         t_local_s = t_local_s + dt_s
         traj_points_local.append(state_vector_local.copy())
-    print (
-        "t:", t_local_s, "с,",
-        "x:", round(state_vector_local[0]/1000, 3), "км,",
-        "y:", round(state_vector_local[1]/1000, 3), "км,",
-        "z:", round(state_vector_local[2]/1000, 3), "км,",
-        "Vx:", round(state_vector_local[3], 1), "м/с,",
-        "Vy:", round(state_vector_local[4], 1), "м/с,",
-        "Vz:", round(state_vector_local[5], 1), "м/с,",
-        "h:", round(altitude_km, 3), "км;"
+    printed_rows.append(_print_decline_snapshot(t_local_s, state_vector_local))
+    excel_path = (
+        Path(__file__).resolve().parent
+        / f"math_model_decline_by_10km_cball_{c_ball_m2kg[i]:.3f}.xlsx"
     )
+    pd.DataFrame(printed_rows).to_excel(excel_path, index=False, sheet_name="decline_by_10km")
+    print(f"Таблица результатов сохранена в файл: {excel_path}")
     print("Расчёт завершён: снижение высоты орбиты на 10 км от начальной")
     return np.array(traj_points_local, dtype=np.float64)
 
@@ -186,44 +208,46 @@ def math_model_flight_over_100km(i: np.int16):
     print (f'Время существования КА на высотах выше 100 км: {t_local_s}') 
     return np.array(times_local, dtype=np.float64), np.array(heights_local, dtype=np.float64)
 
-check_step_size(dt_s)
-traj_points_np = []
-times_np = []
-heights_np = []
+# check_step_size(dt_s)
+# traj_points_np = []
+# times_np = []
+# heights_np = []
 
-for i in range(c_ball_m2kg.size):
-   # traj_points_np.append(math_model_decline_by_10km(i))
-    times_i, heights_i = math_model_flight_over_100km(i)
-    times_np.append(times_i / 3600 / 24)
-    heights_np.append(heights_i)
+math_model_decline_by_10km(0)
 
-plt.figure()
-plt.xlabel("Время, сутки")
-plt.ylabel("Высота орбиты, км")
-plt.minorticks_on()
-plt.xlim([0., 140.])
-plt.ylim([100., 300.])
-plt.grid(which = 'major')
-plt.grid(which = 'minor', linestyle = ':')
-for i in range(c_ball_m2kg.size):
-    plt.plot(times_np[i], heights_np[i], label = f"Баллистический коэффициент = {c_ball_m2kg[i]} м²/кг")
-plt.axhline(y=272.0, color='k', linestyle='--', linewidth=1.0, label="Высота в 272 км")
-plt.legend()
-plt.title("Зависимость высоты орбиты от времени для различных баллистических коэффициентов")
+# for i in range(c_ball_m2kg.size):
+#     traj_points_np.append(math_model_decline_by_10km(i))
+#     times_i, heights_i = math_model_flight_over_100km(i)
+#     times_np.append(times_i / 3600 / 24)
+#     heights_np.append(heights_i)
 
-plt.figure()
-plt.xlabel("Время, сутки")
-plt.ylabel("Высота орбиты, км")
-plt.minorticks_on()
-plt.xlim([0., 70.])
-plt.ylim([260., 290.])
-plt.grid(which = 'major')
-plt.grid(which = 'minor', linestyle = ':')
-for i in range(c_ball_m2kg.size):
-    plt.plot(times_np[i], heights_np[i], label = f"Баллистический коэффициент = {c_ball_m2kg[i]} м²/кг")
-plt.axhline(y=272.0, color='k', linestyle='--', linewidth=1.0, label="Высота в 272 км")
-plt.legend()
-plt.title("Зависимость высоты орбиты от времени для различных баллистических коэффициентов")
+# plt.figure()
+# plt.xlabel("Время, сутки")
+# plt.ylabel("Высота орбиты, км")
+# plt.minorticks_on()
+# plt.xlim([0., 140.])
+# plt.ylim([100., 300.])
+# plt.grid(which = 'major')
+# plt.grid(which = 'minor', linestyle = ':')
+# for i in range(c_ball_m2kg.size):
+#     plt.plot(times_np[i], heights_np[i], label = f"Баллистический коэффициент = {c_ball_m2kg[i]} м²/кг")
+# plt.axhline(y=272.0, color='k', linestyle='--', linewidth=1.0, label="Высота в 272 км")
+# plt.legend()
+# plt.title("Зависимость высоты орбиты от времени для различных баллистических коэффициентов")
+
+# plt.figure()
+# plt.xlabel("Время, сутки")
+# plt.ylabel("Высота орбиты, км")
+# plt.minorticks_on()
+# plt.xlim([0., 70.])
+# plt.ylim([260., 290.])
+# plt.grid(which = 'major')
+# plt.grid(which = 'minor', linestyle = ':')
+# for i in range(c_ball_m2kg.size):
+#     plt.plot(times_np[i], heights_np[i], label = f"Баллистический коэффициент = {c_ball_m2kg[i]} м²/кг")
+# plt.axhline(y=272.0, color='k', linestyle='--', linewidth=1.0, label="Высота в 272 км")
+# plt.legend()
+# plt.title("Зависимость высоты орбиты от времени для различных баллистических коэффициентов")
 
 # ax = plt.figure().add_subplot(111, projection='3d')
 # plt.xlabel("x, km")
@@ -242,4 +266,4 @@ plt.title("Зависимость высоты орбиты от времени 
 # plt.grid()
 # plt.title("Траектории движения КА для различных баллистических коэффициентов")
 
-plt.show()
+# plt.show()

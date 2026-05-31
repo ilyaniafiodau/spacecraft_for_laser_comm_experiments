@@ -9,10 +9,10 @@ speed_of_light_m_s = 299792458  # скорость света
 ''' I. Расчёт основных характеристик ДЗЗ '''
 
 ''' Характеристики камеры и матрицы для ДЗЗ '''
-fov_deg = 2.0                   # круговое поле зрения камеры ДЗЗ
-ccd_size = [10000, 1]            # размер ПЗС-матрицы в пикселях
-pixel_size_m = 5.5e-6           # размер пикселя ПЗС
-focal_length_m = 0.4           # фокусное расстояние камеры
+fov_deg = 2.2                   # круговое поле зрения камеры ДЗЗ (real value for the chosen imager)
+ccd_size = [10000, 1]            # размер ПЗС-матрицы в пикселях (just a typical value, good enough for keeping data flow < 1 GBit/s, as limited by the laser terminal)
+pixel_size_m = 5.5e-6           # размер пикселя ПЗС (real value for the chosen imager)
+focal_length_m = 0.58           # фокусное расстояние камеры (real value for the chosen imager)
 
 ''' Характеристики (лазерного) канала связи'''
 bits_per_pixel = 12             # "радиометрическое" разрешение
